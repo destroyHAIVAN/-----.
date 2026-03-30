@@ -5,11 +5,15 @@
     <title>Наш сайт</title>
     <style>
     body { font-family: "Inter", sans-serif; background: #d7f6f6; display: flex; flex-direction: column; align-items: center; padding: 20px; }
-    .container { width: 100%; max-width: 500px; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 0 10px rgba(0,0,0,0.5); }
-    input { width: 100%; padding: 15px; margin: 0px 0px 0px 0px; border: 1px solid #ddd; border-radius: 12px; box-sizing: border-box; }
-    button{background: #007bff; color: white; border: none; padding: 12px; border-radius: 12px; width: 100%; font-weight: 600; cursor: pointer; transition: 0.3s ease-in-out; }
-    .list-btn { cursor: pointer; border: none; background: #fff9f9; padding: 15px; margin-top: 15px; border-radius: 12px; width: 100%; max-width: 500px; position: relative; }
-    .like-btn { cursor: pointer; border: none; background: #ff9999; padding: 15px; margin-top: 15px; border-radius: 12px; font-size: 14px; transition: 0.2s ease-in-out; }
+    .container { width: 100%; max-width: 500px; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 0 10px rgba(0,0,0,0.1); margin-bottom: 20px; }
+    input { width: 100%; padding: 15px; margin: 10px 0; border: 1px solid #ddd; border-radius: 12px; box-sizing: border-box; }
+    button { background: #007bff; color: white; border: none; padding: 12px; border-radius: 12px; width: 100%; font-weight: 600; cursor: pointer; transition: 0.3s ease-in-out; }
+    button:hover { background: #0056b3; }
+    button:disabled { background: #ccc; cursor: not-allowed; }
+    .post { background: #fff9f9; padding: 15px; margin-top: 15px; border-radius: 12px; width: 100%; max-width: 500px; box-sizing: border-box; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+    .like-btn { cursor: pointer; border: none; background: #ff9999; padding: 8px 15px; margin-top: 10px; border-radius: 12px; font-size: 14px; transition: 0.2s ease-in-out; width: auto; }
+    .like-btn:hover { background: #ff6666; }
+    .time { font-size: 12px; color: #666; display: block; margin-bottom: 8px; }
     </style>
 </head>
 <body>
@@ -45,23 +49,32 @@
             try {
                 await updateDoc(docRef, { likes: increment(1) });
             } catch (error) {
-                console.error(error);
+                console.error("Ошибка при обновлении лайков:", error);
             }
         };
 
         document.getElementById("mainBtn").onclick = async () => {
             const btn = document.getElementById("mainBtn");
+            const nameInput = document.getElementById("name");
+            const emailInput = document.getElementById("email");
+            
+            if (!nameInput.value.trim() || !emailInput.value.trim()) {
+                alert("Пожалуйста, заполните все поля");
+                return;
+            }
+            
             btn.disabled = true;
             try {
                 await addDoc(collection(db, "requests"), {
-                    name: document.getElementById("name").value,
-                    email: document.getElementById("email").value,
+                    name: nameInput.value,
+                    email: emailInput.value,
                     likes: 0,
                     timestamp: serverTimestamp()
                 });
-                document.getElementById("name").value = "";
-                document.getElementById("email").value = "";
+                nameInput.value = "";
+                emailInput.value = "";
             } catch (e) { 
+                console.error("Ошибка при добавлении:", e);
                 alert("Ошибка безопасности: Данные отклонены сервером."); 
             }
             btn.disabled = false;
@@ -73,18 +86,34 @@
             feed.innerHTML = "";
             snapshot.forEach((doc) => {
                 const data = doc.data();
-                feed.innerHTML += `
-                    <div class="post">
-                        <span class="time">${data.timestamp ? data.timestamp.toDate().toLocaleString() : ""}</span>
-                        <b>${data.name}</b>
-                        <p style="margin: 5px 0;">${data.email}</p>
-                        <button class="like-btn" onclick="processLike('${doc.id}')">
-                            ${data.likes} лайков
-                        </button>
-                    </div>
+                const timestamp = data.timestamp ? data.timestamp.toDate().toLocaleString() : "Только что";
+                const likes = data.likes || 0;
+                const name = data.name || "";
+                const email = data.email || "";
+                
+                const postDiv = document.createElement("div");
+                postDiv.className = "post";
+                postDiv.innerHTML = `
+                    <span class="time">🕒 ${timestamp}</span>
+                    <b>${escapeHtml(name)}</b>
+                    <p style="margin: 5px 0;">${escapeHtml(email)}</p>
+                    <button class="like-btn" onclick="processLike('${doc.id}')">
+                        ❤️ ${likes} лайков
+                    </button>
                 `;
+                feed.appendChild(postDiv);
             });
         });
+        
+        function escapeHtml(str) {
+            if (!str) return "";
+            return str
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
     </script>
 </body>
 </html>
