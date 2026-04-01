@@ -1,343 +1,136 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Облачное приложение с Google Auth</title>
-    <style>
-        body { 
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
-            background: #f4f7f6; 
-            display: flex; 
-            flex-direction: column; 
-            align-items: center; 
-            padding: 20px; 
-            margin: 0;
-        }
-        .container { 
-            width: 100%; 
-            max-width: 500px; 
-            background: white; 
-            padding: 25px; 
-            border-radius: 12px; 
-            box-shadow: 0 4px 15px rgba(0,0,0,0.05); 
-            margin-bottom: 20px; 
-            box-sizing: border-box;
-        }
-        .auth-bar { 
-            background: white; 
-            padding: 15px; 
-            border-radius: 12px; 
-            margin-bottom: 20px; 
-            display: flex; 
-            align-items: center; 
-            gap: 15px; 
-            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-            width: 100%;
-            max-width: 500px;
-            box-sizing: border-box;
-        }
-        .user-avatar { 
-            width: 40px; 
-            height: 40px; 
-            border-radius: 50%; 
-            border: 2px solid #007bff;
-            object-fit: cover;
-        }
-        input { 
-            width: 100%; 
-            padding: 12px; 
-            margin: 8px 0; 
-            border: 1px solid #ddd; 
-            border-radius: 6px; 
-            box-sizing: border-box; 
-            font-size: 14px;
-        }
-        input:read-only {
-            background-color: #f5f5f5;
-        }
-        button { 
-            background: #007bff; 
-            color: white; 
-            border: none; 
-            padding: 12px; 
-            border-radius: 6px; 
-            width: 100%; 
-            font-weight: 600; 
-            cursor: pointer; 
-            transition: 0.3s; 
-            font-size: 14px;
-        }
-        button:hover {
-            background: #0056b3;
-        }
-        .logout-btn { 
-            background: #dc3545; 
-            padding: 8px 15px; 
-            width: auto; 
-            font-size: 14px; 
-        }
-        .logout-btn:hover {
-            background: #c82333;
-        }
-        .post { 
-            background: #fff; 
-            border: 1px solid #eaeaea; 
-            padding: 15px; 
-            margin-top: 15px; 
-            border-radius: 8px; 
-            width: 100%; 
-            max-width: 500px; 
-            box-sizing: border-box;
-        }
-        .post-header { 
-            display: flex; 
-            align-items: center; 
-            gap: 10px; 
-            margin-bottom: 10px; 
-        }
-        .post-avatar { 
-            width: 30px; 
-            height: 30px; 
-            border-radius: 50%; 
-            object-fit: cover;
-        }
-        .like-btn { 
-            cursor: pointer; 
-            border: none; 
-            background: #ff6b6b; 
-            color: white;
-            padding: 5px 12px; 
-            border-radius: 20px; 
-            margin-top: 10px;
-            width: auto;
-            font-size: 12px;
-        }
-        .like-btn:hover {
-            background: #ff5252;
-        }
-        .time { 
-            font-size: 11px; 
-            color: #999; 
-            margin-left: auto; 
-        }
-        .user-info {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            flex: 1;
-        }
-        .user-name {
-            font-weight: bold;
-            font-size: 14px;
-        }
-        #feed {
-            width: 100%;
-            max-width: 500px;
-        }
-        h3 {
-            margin-top: 0;
-            margin-bottom: 15px;
-            color: #333;
-        }
-        .error {
-            color: #dc3545;
-            text-align: center;
-            padding: 10px;
-        }
-    </style>
-</head>
-<body>
-    <!-- Блок авторизации -->
-    <div class="auth-bar" id="authBar">
-        <div id="unauthBlock" style="display: flex; width: 100%; justify-content: center;">
-            <button id="loginBtn" style="width: auto; padding: 10px 20px;">Войти через Google</button>
-        </div>
-        <div id="authBlock" style="display: none; width: 100%; align-items: center; gap: 12px;">
-            <img id="userPhoto" class="user-avatar" src="" alt="Avatar">
-            <span id="userName" class="user-name"></span>
-            <button id="logoutBtn" class="logout-btn">Выйти</button>
-        </div>
-    </div>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-analytics.js";
+import {
+    getAuth,
+    GoogleAuthProvider,
+    signInWithPopup,
+    signOut,
+    onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
-    <!-- Форма для отправки сообщения (видна только авторизованным) -->
-    <div id="messageForm" class="container" style="display: none;">
-        <h3>📝 Создать запись</h3>
-        <input type="text" id="name" placeholder="Имя" readonly>
-        <input type="email" id="email" placeholder="Email" readonly>
-        <input type="text" id="content" placeholder="Что у вас нового?">
-        <button id="submitBtn">Опубликовать</button>
-    </div>
+import {
+    getFirestore,
+    collection,
+    addDoc,
+    serverTimestamp,
+    query,
+    orderBy,
+    onSnapshot,
+    updateDoc,
+    doc,
+    increment
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-    <!-- Лента сообщений -->
-    <div id="feed"></div>
-
-    <script type="module">
-        // Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
-import { getAnalytics } from "firebase/analytics";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
-
-// Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
-  apiKey: "AIzaSyAWuh8c6B8A6sZToM7BhvH9Llr-JPtBSWM",
-  authDomain: "braces-3b27a.firebaseapp.com",
-  projectId: "braces-3b27a",
-  storageBucket: "braces-3b27a.firebasestorage.app",
-  messagingSenderId: "89144591989",
-  appId: "1:89144591989:web:e3f02adb8b3cdb3c0dda3c",
-  measurementId: "G-1ZSFNF22DG"
+    apiKey: "YOUR_API_KEY",
+    authDomain: "braces-3b27a.firebaseapp.com",
+    projectId: "braces-3b27a",
+    storageBucket: "braces-3b27a.firebasestorage.app",
+    messagingSenderId: "89144591989",
+    appId: "1:89144591989:web:e3f02adb8b3cdb3c0dda3c",
+    measurementId: "G-1ZSFNF22DG"
 };
 
-// Initialize Firebase
+// Инициализация Firebase
 const app = initializeApp(firebaseConfig);
 const analytics = getAnalytics(app);
-        // Инициализация
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-        const auth = getAuth(app);
-        const provider = new GoogleAuthProvider();
+const db = getFirestore(app);
+const auth = getAuth(app);
+const provider = new GoogleAuthProvider();
 
-        // DOM элементы
-        const loginBtn = document.getElementById('loginBtn');
-        const logoutBtn = document.getElementById('logoutBtn');
-        const unauthBlock = document.getElementById('unauthBlock');
-        const authBlock = document.getElementById('authBlock');
-        const messageForm = document.getElementById('messageForm');
-        const userNameSpan = document.getElementById('userName');
-        const userPhotoImg = document.getElementById('userPhoto');
-        const nameInput = document.getElementById('name');
-        const emailInput = document.getElementById('email');
-        const contentInput = document.getElementById('content');
-        const submitBtn = document.getElementById('submitBtn');
+// DOM элементы
+const loginBtn = document.getElementById('loginBtn');
+const logoutBtn = document.getElementById('logoutBtn');
+const unauthBlock = document.getElementById('unauthBlock');
+const authBlock = document.getElementById('authBlock');
+const messageForm = document.getElementById('messageForm');
+const userNameSpan = document.getElementById('userName');
+const userPhotoImg = document.getElementById('userPhoto');
+const nameInput = document.getElementById('name');
+const emailInput = document.getElementById('email');
+const contentInput = document.getElementById('content');
+const submitBtn = document.getElementById('submitBtn');
 
-        // --- АВТОРИЗАЦИЯ ---
-        loginBtn.onclick = () => {
-            signInWithPopup(auth, provider).catch((error) => {
-                console.error("Ошибка входа:", error);
-                alert("Ошибка входа: " + error.message);
-            });
-        };
-        
-        logoutBtn.onclick = () => signOut(auth);
+// Google Login
+loginBtn.onclick = async () => {
+    try {
+        await signInWithPopup(auth, provider);
+    } catch (error) {
+        console.error("Ошибка входа:", error);
+        alert("Ошибка входа: " + error.message);
+    }
+};
 
-        // Отслеживание состояния авторизации
-        onAuthStateChanged(auth, (user) => {
-            if (user) {
-                // Пользователь авторизован
-                unauthBlock.style.display = 'none';
-                authBlock.style.display = 'flex';
-                messageForm.style.display = 'block';
-                
-                // Заполняем данные пользователя
-                userNameSpan.innerText = user.displayName || user.email;
-                userPhotoImg.src = user.photoURL || 'https://via.placeholder.com/40';
-                nameInput.value = user.displayName || '';
-                emailInput.value = user.email || '';
-            } else {
-                // Пользователь не авторизован
-                unauthBlock.style.display = 'flex';
-                authBlock.style.display = 'none';
-                messageForm.style.display = 'none';
-            }
-        });
+logoutBtn.onclick = () => signOut(auth);
 
-        // --- РАБОТА С ДАННЫМИ ---
-        
-        // Функция для лайка (доступна глобально)
-        window.processLike = async (id) => {
-            try {
-                await updateDoc(doc(db, "requests", id), { 
-                    likes: increment(1) 
-                });
-            } catch (error) {
-                console.error("Ошибка при лайке:", error);
-                alert("Не удалось поставить лайк: " + error.message);
-            }
-        };
+// Проверка авторизации
+onAuthStateChanged(auth, (user) => {
+    if (user) {
+        unauthBlock.style.display = 'none';
+        authBlock.style.display = 'flex';
+        messageForm.style.display = 'block';
 
-        // Отправка нового сообщения
-        submitBtn.onclick = async () => {
-            const content = contentInput.value.trim();
-            if (!content) {
-                alert("Введите текст сообщения!");
-                return;
-            }
-            
-            const user = auth.currentUser;
-            if (!user) {
-                alert("Вы не авторизованы!");
-                return;
-            }
-            
-            try {
-                await addDoc(collection(db, "requests"), {
-                    name: user.displayName || "Аноним",
-                    email: user.email,
-                    photo: user.photoURL || "https://via.placeholder.com/30",
-                    text: content,
-                    likes: 0,
-                    timestamp: serverTimestamp()
-                });
-                contentInput.value = ""; // Очищаем поле
-            } catch (e) {
-                console.error("Ошибка при добавлении:", e);
-                alert("Ошибка безопасности! Проверьте правила (Rules) в Firebase.");
-            }
-        };
+        userNameSpan.innerText = user.displayName || user.email;
+        userPhotoImg.src = user.photoURL || 'https://via.placeholder.com/40';
+        nameInput.value = user.displayName || '';
+        emailInput.value = user.email || '';
+    } else {
+        unauthBlock.style.display = 'flex';
+        authBlock.style.display = 'none';
+        messageForm.style.display = 'none';
+    }
+});
 
-        // REAL-TIME ОБНОВЛЕНИЕ ЛЕНТЫ
-        const q = query(collection(db, "requests"), orderBy("timestamp", "desc"));
-        onSnapshot(q, (snapshot) => {
-            const feed = document.getElementById('feed');
-            feed.innerHTML = "";
-            
-            snapshot.forEach((doc) => {
-                const data = doc.data();
-                const postId = doc.id;
-                
-                // Форматирование времени
-                let timeStr = "";
-                if (data.timestamp) {
-                    try {
-                        const date = data.timestamp.toDate();
-                        timeStr = date.toLocaleString();
-                    } catch (e) {
-                        timeStr = "Только что";
-                    }
-                } else {
-                    timeStr = "Неизвестно";
-                }
-                
-                feed.innerHTML += `
-                    <div class="post">
-                        <div class="post-header">
-                            <img src="${data.photo || 'https://via.placeholder.com/30'}" class="post-avatar" onerror="this.src='https://via.placeholder.com/30'">
-                            <b>${escapeHtml(data.name || data.email)}</b>
-                            <span class="time">${timeStr}</span>
-                        </div>
-                        <p>${escapeHtml(data.text || "")}</p>
-                        <button class="like-btn" onclick="processLike('${postId}')">❤️ ${data.likes || 0}</button>
-                    </div>
-                `;
-            });
-        });
+// Лайки
+window.processLike = async (id) => {
+    await updateDoc(doc(db, "requests", id), {
+        likes: increment(1)
+    });
+};
 
-        // Функция для защиты от XSS
-        function escapeHtml(str) {
-            if (!str) return "";
-            return str
-                .replace(/&/g, "&amp;")
-                .replace(/</g, "&lt;")
-                .replace(/>/g, "&gt;")
-                .replace(/"/g, "&quot;")
-                .replace(/'/g, "&#039;");
-        }
-        
-        // Для тестов в консоли
-        window.db = db;
-    </script>
-</body>
-</html>
+// Добавление поста
+submitBtn.onclick = async () => {
+    const content = contentInput.value.trim();
+    const user = auth.currentUser;
+
+    if (!content) return alert("Введите текст");
+    if (!user) return alert("Сначала войдите");
+
+    await addDoc(collection(db, "requests"), {
+        name: user.displayName,
+        email: user.email,
+        photo: user.photoURL,
+        text: content,
+        likes: 0,
+        timestamp: serverTimestamp()
+    });
+
+    contentInput.value = "";
+};
+
+// Загрузка постов
+const q = query(collection(db, "requests"), orderBy("timestamp", "desc"));
+
+onSnapshot(q, (snapshot) => {
+    const feed = document.getElementById("feed");
+    feed.innerHTML = "";
+
+    snapshot.forEach((item) => {
+        const data = item.data();
+
+        feed.innerHTML += `
+            <div class="post">
+                <div class="post-header">
+                    <img src="${data.photo}" class="post-avatar">
+                    <b>${data.name}</b>
+                </div>
+                <p>${data.text}</p>
+                <button class="like-btn" onclick="processLike('${item.id}')">
+                    ❤️ ${data.likes || 0}
+                </button>
+            </div>
+        `;
+    });
+});
+</script>
