@@ -446,7 +446,7 @@
         if (!supabaseClient) return [];
         try {
             const { data, error } = await supabaseClient
-                .from('profiles')
+                .from('profiles.')
                 .select('*')
                 .order('username', { ascending: true });
             
@@ -547,7 +547,7 @@
         
         try {
             const { data, error } = await supabaseClient
-                .from('profiles')
+                .from('profiles.')
                 .update({ status: newStatus })
                 .eq('id', CURRENT_USER_ID);
             
@@ -615,7 +615,7 @@
                 {
                     event: '*',           // INSERT, UPDATE, DELETE
                     schema: 'public',
-                    table: 'profiles'
+                    table: 'profiles.'
                 },
                 async (payload) => {
                     console.log('Realtime изменение:', payload.eventType, payload.new);
