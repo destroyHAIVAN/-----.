@@ -21,13 +21,11 @@
             padding: 2rem 1.5rem;
         }
 
-        /* главный контейнер */
         .dashboard {
             max-width: 1400px;
             margin: 0 auto;
         }
 
-        /* карточки */
         .card {
             background: white;
             border-radius: 28px;
@@ -89,6 +87,22 @@
             transform: scale(0.97);
         }
 
+        .logout-btn {
+            background: #dc3545;
+            border: none;
+            padding: 8px 18px;
+            border-radius: 40px;
+            color: white;
+            font-weight: 600;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        .logout-btn:hover {
+            background: #c82333;
+        }
+
         .auth-status-badge {
             font-size: 0.75rem;
             background: #f0f2f5;
@@ -97,7 +111,6 @@
             color: #2c3e50;
         }
 
-        /* две основных колонки */
         .stats-grid {
             display: flex;
             gap: 24px;
@@ -184,7 +197,6 @@
             color: #b45f06;
         }
 
-        /* таймер */
         .timer-display {
             text-align: center;
             background: linear-gradient(145deg, #f8fafd, #ffffff);
@@ -239,7 +251,6 @@
             color: #b91c1c;
         }
 
-        /* общий чат */
         .chat-card {
             margin-top: 10px;
         }
@@ -333,22 +344,23 @@
 <body>
 
 <div class="dashboard">
-    <!-- шапка -->
     <div class="header-area">
         <div class="title-section">
             <h1>📡 Монитор группы &nbsp;·&nbsp; Учебный таймер</h1>
             <p>Онлайн участники • Активность чата • Твоё учебное время</p>
         </div>
         <div class="auth-panel">
-            <button class="google-btn" onclick="loginWithGoogle()">
+            <button class="google-btn" id="googleLoginBtn">
                 🔐 Войти через Google
+            </button>
+            <button class="logout-btn" id="logoutBtn" style="display: none;">
+                🚪 Выйти
             </button>
             <div id="authStatus" class="auth-status-badge">⏳ Не авторизован</div>
             <div id="currentUserIdDisplay" style="font-size: 11px; color:#5e6f8d;"></div>
         </div>
     </div>
 
-    <!-- две ключевые карточки: онлайн + таймер учёбы -->
     <div class="stats-grid">
         <div class="card online-card">
             <div class="section-title">
@@ -356,7 +368,7 @@
                 <span id="onlineCounter" class="online-count">0</span>
             </div>
             <div id="onlineMembersList" class="member-list">
-                <div style="padding: 16px; text-align:center; color:#aaa;">Загрузка...</div>
+                <div style="padding: 16px; text-align:center; color:#aaa;">Войдите через Google</div>
             </div>
             <div style="margin-top: 12px; font-size: 12px; color:#5e7a97; background:#f3f6fc; border-radius: 20px; padding: 6px 12px;">
                 💡 Онлайн = Пользователи, чей последний пинг был < 2 минут
@@ -375,54 +387,42 @@
                 <button class="timer-btn" id="resetTimerBtn">🔄 Сбросить счёт</button>
             </div>
             <div style="margin-top: 20px; background:#f9fbfe; border-radius: 20px; padding: 10px; font-size: 0.75rem; text-align:center;">
-                📖 Таймер идёт автоматически, если вы залогинены и ваша активность вкладки или чата обновляет "последнее действие".
-                <br>Минимальный интервал — тихо накапливается.
+                📖 Таймер идёт автоматически, если вы залогинены
             </div>
         </div>
     </div>
 
-    <!-- Общий чат (как на скриншоте) -->
     <div class="card chat-card">
         <div class="section-title">
             💬 Общий чат группы
         </div>
         <div id="chatMessagesContainer" class="chat-messages">
-            <div style="text-align:center; color:#8b9bb0;">Загрузка сообщений...</div>
+            <div style="text-align:center; color:#8b9bb0;">Войдите через Google для участия в чате</div>
         </div>
         <div class="chat-input-area">
-            <input type="text" id="messageInput" class="chat-input" placeholder="Сообщение..." maxlength="200">
-            <button id="sendMessageBtn" class="send-btn">➤ Отправить</button>
+            <input type="text" id="messageInput" class="chat-input" placeholder="Сообщение..." maxlength="200" disabled>
+            <button id="sendMessageBtn" class="send-btn" disabled>➤ Отправить</button>
         </div>
         <div style="font-size: 10px; margin-top: 8px; color:#6b819c;">* Сообщения видны всем онлайн/офлайн участникам</div>
     </div>
     <div class="footer-note">
-        🟢 Индикатор статуса обновляется в реальном времени • При входе таймер продолжит копить учебное время (по вашей активности)
+        🟢 Индикатор статуса обновляется в реальном времени • При входе таймер продолжит копить учебное время
     </div>
 </div>
 
 <script>
-    // ---------- SUPABASE ----------
     const SUPABASE_URL = 'https://pxnetnsamdnpullutqqw.supabase.co';
     const SUPABASE_ANON_KEY = 'sb_publishable_XktJcwnMKWJPpny2r5Qltg_0XrdB4yO';
     const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     let CURRENT_USER_ID = null;
-    let CURRENT_USER_EMAIL = null;    // для отображения имени
+    let CURRENT_USER_EMAIL = null;
     let CURRENT_USER_NAME = null;
 
-    // ---------- таблицы ----------
-    // Предполагаем наличие таблиц:
-    // 1) user_presence: user_id (text), last_seen (timestamp), study_seconds (int), name (text)
-    // 2) chat_messages: id, user_id, user_name, message, created_at
-    // Если таблиц нет — скрипт их создаст через SQL но для простоты полагаемся что они есть. 
-    // Добавим проверку и инициализацию через RPC? Лучше предусмотреть: при первом входе создадим запись presence.
-
-    // Глобальные переменные
     let studyInterval = null;
-    let localStudySeconds = 0;       // секунды накопленные для текущего пользователя (локально)
-    let lastTimeSync = null;
+    let localStudySeconds = 0;
+    let heartbeatInterval = null;
 
-    // DOM элементы
     const onlineCounterSpan = document.getElementById('onlineCounter');
     const onlineMembersDiv = document.getElementById('onlineMembersList');
     const studyTimerDisplay = document.getElementById('studyTimerDisplay');
@@ -430,8 +430,11 @@
     const chatContainer = document.getElementById('chatMessagesContainer');
     const messageInput = document.getElementById('messageInput');
     const sendBtn = document.getElementById('sendMessageBtn');
+    const googleLoginBtn = document.getElementById('googleLoginBtn');
+    const logoutBtn = document.getElementById('logoutBtn');
+    const authStatus = document.getElementById('authStatus');
+    const currentUserIdDisplay = document.getElementById('currentUserIdDisplay');
 
-    // ---------- Вспомогательные функции времени ----------
     function formatTimeFromSeconds(totalSec) {
         let hours = Math.floor(totalSec / 3600);
         let minutes = Math.floor((totalSec % 3600) / 60);
@@ -445,7 +448,6 @@
         }
     }
 
-    // Загрузить учёбные секунды с сервера (при входе)
     async function loadStudySecondsFromDB(userId) {
         if (!userId) return 0;
         const { data, error } = await supabase
@@ -461,7 +463,6 @@
         if (data) {
             return data.study_seconds || 0;
         } else {
-            // создаём запись нового пользователя
             const insertData = {
                 user_id: userId,
                 last_seen: new Date().toISOString(),
@@ -473,7 +474,6 @@
         }
     }
 
-    // Сохранить study_seconds в БД
     async function saveStudySecondsToDB(userId, seconds) {
         if (!userId) return;
         await supabase
@@ -482,24 +482,16 @@
             .eq('user_id', userId);
     }
 
-    // Запуск накопления времени учёбы (пока пользователь онлайн и активен)
     function startStudyAccumulator() {
         if (studyInterval) clearInterval(studyInterval);
-        // Каждые 10 секунд увеличиваем локальное время + сохраняем в бд (асинхронно)
         studyInterval = setInterval(async () => {
-            if (!CURRENT_USER_ID) return; // аноним — не копим
-
-            // проверяем — активна ли вкладка? допустим всегда добавляем, но реальный сценарий: если юзер онлайн и не вышел
-            // добавим проверку: последний пинг юзера не старше 2 минут? лучше добавим условие: при отсутствии движения в чате
-            // можно считать всегда, но по заданию счетчик учебного времени, пока он в системе. 
-            // используем просто инкремент каждые 10 секунд, однако чтобы не дублировать синхронизацию - сохраняем в БД.
+            if (!CURRENT_USER_ID) return;
             localStudySeconds += 10;
             updateTimerUI();
             await saveStudySecondsToDB(CURRENT_USER_ID, localStudySeconds);
         }, 10000);
     }
 
-    // синхронизация таймера при входе
     async function syncUserTimerFromDB() {
         if (!CURRENT_USER_ID) return;
         const seconds = await loadStudySecondsFromDB(CURRENT_USER_ID);
@@ -507,12 +499,10 @@
         updateTimerUI();
     }
 
-    // ---------- Управление онлайн статусом: heartbeat каждые 25 секунд ----------
     async function updateHeartbeat() {
         if (!CURRENT_USER_ID) return;
         const now = new Date().toISOString();
         const nameToShow = CURRENT_USER_NAME || (CURRENT_USER_EMAIL ? CURRENT_USER_EMAIL.split('@')[0] : "Участник");
-        // Обновляем last_seen и имя
         const { error } = await supabase
             .from('user_presence')
             .upsert({
@@ -524,16 +514,14 @@
         if (error) console.warn("heartbeat error", error);
     }
 
-    let heartbeatInterval = null;
     function startHeartbeat() {
         if (heartbeatInterval) clearInterval(heartbeatInterval);
         heartbeatInterval = setInterval(() => {
             updateHeartbeat();
         }, 25000);
-        updateHeartbeat(); // сразу
+        updateHeartbeat();
     }
 
-    // ---------- Получение списка онлайн (last_seen > now - 2 мин) + отображение ----------
     async function fetchOnlineUsers() {
         const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
         const { data, error } = await supabase
@@ -579,8 +567,6 @@
         onlineMembersDiv.innerHTML = html;
     }
 
-    // ---------- Чат: подписка realtime ----------
-    let chatSubscription = null;
     async function loadInitialMessages() {
         const { data, error } = await supabase
             .from('chat_messages')
@@ -639,6 +625,7 @@
         }
     }
 
+    let chatSubscription = null;
     function subscribeToChat() {
         if (chatSubscription) {
             supabase.removeChannel(chatSubscription);
@@ -646,7 +633,6 @@
         chatSubscription = supabase
             .channel('public:chat_messages')
             .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages' }, payload => {
-                // при новом сообщении обновляем весь список сообщений (для простоты перезагрузка)
                 refreshChatFeed();
             })
             .subscribe();
@@ -657,7 +643,6 @@
         renderMessages(msgs);
     }
 
-    // ---------- Подписка на изменения присутствия в реальном времени (обновление списка онлайн) ----------
     let presenceChannel = null;
     function subscribeToPresenceChanges() {
         if (presenceChannel) supabase.removeChannel(presenceChannel);
@@ -669,7 +654,6 @@
             .subscribe();
     }
 
-    // ---------- Сброс таймера ----------
     async function resetStudyTimer() {
         if (!CURRENT_USER_ID) {
             alert("Нужно войти, чтобы сбросить таймер учёбы");
@@ -679,39 +663,35 @@
             localStudySeconds = 0;
             updateTimerUI();
             await saveStudySecondsToDB(CURRENT_USER_ID, 0);
-            // обновляем список онлайн, чтобы новые значения отобразились у других
             renderOnlineList();
         }
     }
 
-    // ---------- Обработка логина и инициализация ----------
     async function handleUserLogin(user) {
         if (!user) return;
         CURRENT_USER_ID = user.id;
         CURRENT_USER_EMAIL = user.email;
         CURRENT_USER_NAME = user.user_metadata?.full_name || (user.email ? user.email.split('@')[0] : "Участник");
-        document.getElementById('currentUserIdDisplay').innerText = `👤 ${CURRENT_USER_NAME} (${CURRENT_USER_ID.slice(0,8)}...)`;
-        document.getElementById('authStatus').innerHTML = '✅ Активен · Google';
+        
+        currentUserIdDisplay.innerText = `👤 ${CURRENT_USER_NAME}`;
+        authStatus.innerHTML = '✅ Активен · Google';
+        authStatus.style.background = '#e3f5e9';
+        googleLoginBtn.style.display = 'none';
+        logoutBtn.style.display = 'block';
+        
+        messageInput.disabled = false;
+        sendBtn.disabled = false;
 
-        // загрузить его учебные секунды
         await syncUserTimerFromDB();
-        // запустить накопление времени
-        if (studyInterval) clearInterval(studyInterval);
         startStudyAccumulator();
         startHeartbeat();
-
-        // обновить присутствие (upsert)
         await updateHeartbeat();
-
-        // загрузить онлайн и чат
         await renderOnlineList();
         await refreshChatFeed();
 
-        // подписаться на изменения присутствия и чата
         subscribeToPresenceChanges();
         subscribeToChat();
 
-        // дополнительно принудительный рендер через каждые 10 секунд для списка онлайн (на всякий)
         if (window._onlineInterval) clearInterval(window._onlineInterval);
         window._onlineInterval = setInterval(() => renderOnlineList(), 15000);
     }
@@ -720,21 +700,45 @@
         if (studyInterval) clearInterval(studyInterval);
         if (heartbeatInterval) clearInterval(heartbeatInterval);
         if (window._onlineInterval) clearInterval(window._onlineInterval);
+        
         CURRENT_USER_ID = null;
         localStudySeconds = 0;
         updateTimerUI();
-        document.getElementById('currentUserIdDisplay').innerText = '';
-        document.getElementById('authStatus').innerHTML = '❌ Не авторизован';
-        onlineMembersDiv.innerHTML = '<div style="padding:16px;">Войдите, чтобы видеть онлайн</div>';
+        
+        currentUserIdDisplay.innerText = '';
+        authStatus.innerHTML = '❌ Не авторизован';
+        authStatus.style.background = '#f0f2f5';
+        googleLoginBtn.style.display = 'block';
+        logoutBtn.style.display = 'none';
+        
+        messageInput.disabled = true;
+        sendBtn.disabled = true;
+        messageInput.value = '';
+        
+        onlineMembersDiv.innerHTML = '<div style="padding:16px;">Войдите через Google</div>';
         onlineCounterSpan.innerText = '0';
-        chatContainer.innerHTML = '<div style="text-align:center;">Войдите для участия в чате</div>';
+        chatContainer.innerHTML = '<div style="text-align:center;">Войдите через Google для участия в чате</div>';
     }
 
-    // ---------- Google Login ----------
+    // Только вход через Google
     window.loginWithGoogle = async function() {
-        const { error } = await supabase.auth.signInWithOAuth({ provider: 'google' });
+        const { error } = await supabase.auth.signInWithOAuth({ 
+            provider: 'google',
+            options: {
+                redirectTo: window.location.origin + window.location.pathname
+            }
+        });
         if (error) alert('Ошибка входа: ' + error.message);
     };
+
+    async function logout() {
+        const { error } = await supabase.auth.signOut();
+        if (error) {
+            console.error('Ошибка выхода:', error);
+        } else {
+            await handleLogout();
+        }
+    }
 
     async function initAuth() {
         const { data: { user } } = await supabase.auth.getUser();
@@ -751,9 +755,11 @@
                 await handleLogout();
             }
         });
+        
+        googleLoginBtn.onclick = () => loginWithGoogle();
+        logoutBtn.onclick = () => logout();
     }
 
-    // инициализация событий
     document.addEventListener('DOMContentLoaded', async () => {
         resetTimerBtn.addEventListener('click', resetStudyTimer);
         sendBtn.addEventListener('click', () => sendMessage(messageInput.value));
@@ -771,13 +777,7 @@
         });
     }
 
-    // небольшая проверка наличия таблиц, если их нет, выводим консоль предупреждение,
-    // но это не помешает пользователю, однако для production нужно создать таблицы через SQL.
-    // для корректной работы необходимо иметь таблицы: 
-    // user_presence (user_id text primary key, last_seen timestamptz, study_seconds int, name text)
-    // chat_messages (id serial primary key, user_id text, user_name text, message text, created_at timestamptz)
-    // если их нет, скрипт будет падать с ошибкой. Предложим создать через SQL панель Supabase.
-    console.log("✅ Монитор группы с онлайн-индикатором и счётчиком учёбы запущен.");
+    console.log("✅ Монитор группы — только Google вход");
 </script>
 </body>
 </html>
